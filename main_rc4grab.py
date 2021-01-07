@@ -6,8 +6,8 @@ import time
 import random
 import telegram
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Updater, CommandHandler, CallbackQueryHandler
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, ReplyKeyboardRemove
+from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, ConversationHandler, MessageHandler, Filters
 
 from secret import * # local secret.py file
 
@@ -43,14 +43,19 @@ def help(update,context):
 # METHODS TO BE IMPLEMENTED FOR v1.0
 
 def CreateNewRequest(update, context):
-    keyboard = [
-        [
-            InlineKeyboardButton(text="Food Dabao", callback_data='food'),
-            InlineKeyboardButton(text="Others", callback_data='other'),
-        ]
-    ]
-    replyMarkup = InlineKeyboardMarkup(keyboard)
+    #keyboard = [
+    #    [
+    #        InlineKeyboardButton(text="Food Dabao", callback_data='food'),
+    #        InlineKeyboardButton(text="Others", callback_data='other'),
+    #    ]
+    #]
+    #replyMarkup = InlineKeyboardMarkup(keyboard)
+
+    keyboard = [['Food Dabao', 'Others']]
+    replyMarkup = ReplyKeyboardMarkup(keyboard, one_time_keyboard = True)
     update.message.reply_text("What is the category of your new request?", reply_markup = replyMarkup)
+
+    return 1
 
 # helper function - to handle CreateNewRequests callback queries    
 def CreateNewRequestKeyboard(update, context):
@@ -59,16 +64,22 @@ def CreateNewRequestKeyboard(update, context):
     if (query.data == 'food'):
         # query.edit_message_text(f"Selected option: {query.data}", )
         # context.bot.send_message(chat_id=update.effective_chat.id, text="hi from food")
-        keyboard = [
-            [
-                InlineKeyboardButton(text="Create my request!", callback_data='create_new'),
-            ]
-        ]
-        replyMarkup = InlineKeyboardMarkup(keyboard)                       
         
-        query.edit_message_text("Food Dabao it is. What is your order?"
-                                "\n\n(TODO: implement ability for user to order via typing in, or inline keyboard menu. For now just press the button)", 
-                                reply_markup = replyMarkup)          
+        #keyboard = [
+        #    [
+        #        InlineKeyboardButton(text="Create my request!", callback_data='create_new'),
+        #    ]
+        #]
+        #replyMarkup = InlineKeyboardMarkup(keyboard)                       
+        
+        #query.edit_message_text("Food Dabao it is. What is your order? Remember to include:\n1) Location \n2) Name of food item \n3) Quantity"
+        #                        "\n\n(TODO: implement ability for user to order via typing in, or inline keyboard menu. For now just press the button)", 
+        #                        reply_markup = replyMarkup)    
+        
+        query.edit_message_text("Food Dabao it is. What is your order? Remember to include:\n1) Location \n2) Name of food item \n3) Quantity"
+                                "\n\n(TODO: implement ability for user to order via typing in, or inline keyboard menu.)")
+        query.answer()
+        return 1
 
     elif (query.data == 'create_new'):
         query.edit_message_text("Success! Your request has been created."
@@ -97,6 +108,32 @@ def ViewAcceptedRequests(update,context):
     update.message.reply_text("Notes:"
                               "\nCan only be called via PM."
                               "\nTODO: implement ability to manage requests. 1) 'unaccept' a request (send from ONGOING back to OPEN), or 2) mark a request as completed (send from ONGOING to CLOSED).")
+
+# 3 methods below used to implement adding of new food request
+def NewFoodRequest(update, context):
+    food_request = update.message.text
+    update.message.reply_text('Your request {} has been logged!'.format(food_request))
+    return ConversationHandler.END
+
+def cancel(update, context):
+    update.message.reply_text('Request cancelled!')
+    return ConversationHandler.END
+
+def NotifyUser(update, context):
+    user_input = update.message.text
+    print(user_input)
+    if 'Food Dabao' in user_input:
+        update.message.reply_text("Food Dabao it is. What is your order? Remember to include:\n1) Location \n2) Name of food item \n3) Quantity \n\nType /cancel to cancel your request"
+                                "\n\n(TODO: implement ability for user to order via typing in, or inline keyboard menu.)")
+        return 2
+
+    elif 'Others' in user_input:
+        update.message.reply_text('Coming soon!')
+    
+    else: 
+        update.message.reply_text('Invalid input.')
+
+    return ConversationHandler.END
 
 # some filler data
 request1 = "User: @xxx\nRequest Type: food\nRequest Details: lorem ipsum 111"
@@ -185,7 +222,6 @@ def alarm(context):
 
 
 def main():
-
   # Create Updater object and attach dispatcher to it
   updater = Updater(TOKEN, use_context=True)
   dp = updater.dispatcher
@@ -198,11 +234,19 @@ def main():
   dp.add_handler(CommandHandler('ping',ping))
 
   # To be implemented for v1.0
-  dp.add_handler(CommandHandler('new',CreateNewRequest))
   dp.add_handler(CallbackQueryHandler(CreateNewRequestKeyboard))
   dp.add_handler(CommandHandler('viewall',ViewAllRequests))
   dp.add_handler(CommandHandler('viewmy',ViewMyRequests))
   dp.add_handler(CommandHandler('viewtodo',ViewAcceptedRequests))
+
+  conv_handler = ConversationHandler(
+      entry_points = [CommandHandler('new', CreateNewRequest)],
+      states = {1 : [MessageHandler(Filters.regex('^(Food Dabao|Others)$'), NotifyUser)],
+                2 : [CommandHandler('cancel', cancel), MessageHandler(Filters.text, NewFoodRequest)]},
+      fallbacks = [CommandHandler('cancel', cancel)]
+      )
+
+  dp.add_handler(conv_handler)
 
   #   dp.add_handler(CommandHandler('redblack',redblack))
   #   dp.add_handler(CallbackQueryHandler(Button))
